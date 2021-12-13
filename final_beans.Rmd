@@ -1,0 +1,689 @@
+Eleccion de modelos de prediccion para el dataset Beans 
+por Santiago Colantonio
+
+Librerias utilizadas
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(caret)
+library(lattice)
+library(ggplot2)
+library(fastDummies)
+library(naniar)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(nnet)
+library(NeuralNetTools)
+library(caTools)
+library(MASS)
+library(funModeling)
+library(ggstatsplot)
+library(corrplot)
+library(tidyr)
+library(class)
+library(randomForest)
+library(xgboost)
+```
+
+Importacion de la base a utilizar
+```{r}
+base <-  read.csv2("beans.csv", header = T)
+df <- base
+```
+
+Analizamos la base en general
+```{r}
+df_status(df)
+dim(df)
+str(df)
+summary(df)
+
+```
+```{r}
+vis_miss(df)
+```
+
+
+```{r}
+prop.table(table(df$Class))
+```
+Vemos que hay una proporcion casi igual de los dos valores que toma la variable a predecir
+
+Hacemos arreglos de algunas variables
+-convertimos la variable objetivo en factor 
+-cambiamos el nombre de la variable que tiene forma extraña
+-eliminamos la variable de ID, sea X
+```{r}
+df$Class <- as.factor(df$Class)
+df$Area <- df$Ã...Area
+df$Ã...Area<- NULL
+df$X <- NULL
+```
+
+Analisis de las variables predictoras
+```{r message=FALSE, warning=FALSE}
+boxplot(df$Perimeter, plot = T)
+boxplot(df$MajorAxisLength, plot = T)
+boxplot(df$MinorAxisLength, plot = T)
+boxplot(df$AspectRation, plot = T)
+boxplot(df$Eccentricity, plot = T)
+boxplot(df$ConvexArea, plot = T)
+boxplot(df$EquivDiameter, plot = T)
+boxplot(df$Extent, plot = T)
+boxplot(df$Solidity, plot = T) 
+boxplot(df$roundness, plot = T)
+boxplot(df$Compactness, plot = T)
+boxplot(df$ShapeFactor1, plot = T)
+boxplot(df$ShapeFactor2, plot = T)
+boxplot(df$ShapeFactor3, plot = T)
+boxplot(df$ShapeFactor4, plot = T)
+boxplot(df$Area, plot = T)
+```
+
+```{r}
+df %>%
+  ggplot(aes(x=Area, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Area segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+```{r}
+df %>%
+  ggplot(aes(x=Perimeter, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Perimeter segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+Para shapefactor 1 , 2 , 3 y 4
+```{r}
+df %>%
+  ggplot(aes(x=ShapeFactor1, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "ShapeFactor1 segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+df %>%
+  ggplot(aes(x=ShapeFactor2, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "ShapeFactor2 segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+df %>%
+  ggplot(aes(x=ShapeFactor3, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "ShapeFactor3 segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+df %>%
+  ggplot(aes(x=ShapeFactor4, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "ShapeFactor4 segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+
+```{r}
+df %>%
+  ggplot(aes(x=Extent, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Extent segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+En este caso se puede ver que el comportamiento es similar para las dos clases
+
+Analizamos las variables derivadas
+```{r}
+df %>%
+  ggplot(aes(x=roundness, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Roundness segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+Se puede observar como las clases objetivo se diferencian por su roundness, podemos ver como la clase Sira tiene sus valores inferiores que Dermason
+
+Ahora se cruza compactness por la clase objetivo
+
+```{r}
+df %>%
+  ggplot(aes(x=Compactness, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Compactness segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+Se puede observar como la clase Sira tiene una Compactness menor aproximadamente que la clase Dermason
+
+
+```{r}
+df %>%
+  ggplot(aes(x=AspectRation, group=Class, fill=Class)) +
+    geom_density(adjust=2, alpha=.65)+
+    labs(title = "Aspect Ration segun la clase",
+       fill = "Clase")+
+  scale_colour_brewer(
+  type = "div",
+  palette = 9,
+  direction = 1,
+  aesthetics = "fill")
+```
+
+
+Vemos la correlacion de las variables entre ellas 
+```{r}
+matriz <- as.matrix(cor(df[,-16]))
+corrplot(matriz)
+```
+
+Se estandarizan todas las variables numericas para los modelos que se ven afectados por las diferentes amplitudes
+```{r}
+columnas = c("Perimeter", "MajorAxisLength", "MinorAxisLength", "AspectRation", "Eccentricity", "ConvexArea", "EquivDiameter", "Extent", "Solidity", "roundness", "Compactness", "ShapeFactor1", "ShapeFactor2", "ShapeFactor3", "ShapeFactor4", "Area" )
+df[columnas] = lapply(df[columnas], scale)
+```
+
+
+Armamos los conjuntos de Train, Validation y Test
+```{r}
+set.seed(8);particion <- sample(seq(1, 3), size = nrow(df), replace = TRUE, prob = c(.6, .2, .2))
+set.seed(8);train <- df[particion == 1,]
+set.seed(8);validation <- df[particion == 2,]
+set.seed(8);test <- df[particion == 3,]
+```
+
+
+Verificamos que las clases de la variable objetivo hayan queda en las mismas proporciones que para el dataset completo
+```{r}
+prop.table(table(df$Class))
+prop.table(table(train$Class))
+prop.table(table(test$Class))
+```
+```{r}
+names(df)
+str(df)
+summary(base)
+```
+
+
+#1.Naive Bayes (NB)
+```{r}
+set.seed(8);modeloNB = naiveBayes(Class~., train)
+```
+
+Analisis de modelo
+```{r}
+predNB=predict(modeloNB,train,type="class")
+mNB = caret::confusionMatrix(factor(predNB),factor(train$Class))
+
+predNB1=predict(modeloNB,validation,type="class")
+mNB1 = caret::confusionMatrix(factor(predNB1),factor(validation$Class))
+
+predNB2=predict(modeloNB,test,type="class")
+mNB2 = caret::confusionMatrix(factor(predNB2),factor(test$Class))
+
+print("TRAIN")
+mNB
+print("VALIDATION")
+mNB1
+print("TEST")
+mNB2
+```
+Armado de matrices de los diferentes modelos
+```{r}
+MMacc = data.frame(cbind(0,0,0,0))
+colnames(MMacc) <- c("modelo","train","validation","test")
+```
+
+```{r}
+mNB$overall["Accuracy"]
+mNB1$overall["Accuracy"]
+mNB2$overall["Accuracy"]
+```
+
+
+```{r}
+MMacc <- MMacc %>% add_row(modelo=1, train=0.9089, validation = 0.8995, test =0.9094)
+```
+
+#2.Red Neuronal (RN)
+
+
+Analisis de modelo
+```{r}
+size  = c(2, 3, 4, 5, 6, 7, 8, 9, 10)
+Macc = data.frame(cbind(0,0,0))
+colnames(Macc) <- c("size","train","validation")
+for(i in size){
+  print(paste("size = ",i))
+  
+  set.seed(8);red=nnet(Class~.,train ,size=i,maxit=100000, MaxNWts = 5000)
+  
+  predRN=predict(red,train,type="class")
+  MRN = caret::confusionMatrix(factor(predRN),factor(train$Class))
+  acc <- MRN$overall["Accuracy"]
+  
+  predRN1=predict(red,validation,type="class")
+  MRN1 = caret::confusionMatrix(factor(predRN1),factor(validation$Class))
+  acc1 <- MRN1$overall["Accuracy"]
+  
+  Macc <- Macc %>% add_row(size=i, train=acc, validation = acc1)
+}
+```
+
+Graficamos la comparacion
+```{r}
+Macc <- Macc[-1,]
+Macc %>% 
+  gather("id", "value", 2:3) %>% 
+  ggplot(aes(size, value, col=id, size= 1))+
+  geom_point()+
+  labs(title = "Accuracy segun size")
+  
+```
+
+Elejimos size igual a 3
+```{r}
+set.seed(8);red=nnet(Class~.,train ,size=3,maxit=100000, MaxNWts = 5000)
+plotnet(red)
+```
+
+Ahora cambiamos el decay con el mismo size = 3
+
+```{r}
+decay  = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+Macc = data.frame(cbind(0,0,0))
+colnames(Macc) <- c("decay","train","validation")
+for(i in decay){
+  print(paste("decay = ",i))
+  
+  set.seed(8);red=nnet(Class~.,train ,size=3,maxit=100000, MaxNWts = 5000, decay = i)
+  predRN=predict(red,train,type="class")
+  MRN = caret::confusionMatrix(factor(predRN),factor(train$Class))
+  acc <- MRN$overall["Accuracy"]
+  
+  predRN1=predict(red,validation,type="class")
+  MRN1 = caret::confusionMatrix(factor(predRN1),factor(validation$Class))
+  acc1 <- MRN1$overall["Accuracy"]
+
+  Macc <- Macc %>% add_row(decay=i, train=acc, validation = acc1)
+}
+```
+
+```{r}
+Macc <- Macc[-1,]
+Macc %>% 
+  gather("id", "value", 2:3) %>% 
+  ggplot(aes(decay, value, col=id, size= 1))+
+  geom_point()+
+  labs(title = "Accuracy segun decay")
+```
+
+elegimos decay 0.2 y size 3
+```{r}
+set.seed(8);red=nnet(Class~.,train ,size=3, decay=0.2,maxit=100000, MaxNWts = 5000)
+plotnet(red)
+```
+```{r}
+predRN=predict(red,train,type="class")
+MRN = caret::confusionMatrix(factor(predRN),factor(train$Class))
+
+predRN1=predict(red,validation,type="class")
+MRN1 = caret::confusionMatrix(factor(predRN1),factor(validation$Class))
+
+predRN2=predict(red,test,type="class")
+MRN2 = caret::confusionMatrix(factor(predRN2),factor(test$Class))
+print("TRAIN")
+MRN
+print("VALIDATION")
+MRN1
+print("TEST")
+MRN2
+```
+
+```{r}
+MMacc <- MMacc %>% add_row(modelo=2, train=0.9338 , validation =0.9211, test = 0.922)
+```
+
+#3.SVM
+Analizamos el modelo de Support Vector Machine
+
+```{r}
+kernel  = c("linear", "polynomial", "radial", "sigmoid")
+Macc = data.frame(cbind(0,0,0))
+colnames(Macc) <- c("kernel","train","validation")
+
+for(i in 1:length(kernel)){
+  set.seed(8);svm = svm(Class~.,train, kernel=kernel[[i]], type = 'C-classification')
+  
+  predSVM = predict(svm, train, type = "C-classification")
+  mSVM = caret::confusionMatrix(factor(predSVM),factor(train$Class))
+  
+  acc <- mSVM$overall["Accuracy"]
+  
+  predSVM1 = predict(svm, validation, type = "C-classification")
+  mSVM1 = caret::confusionMatrix(factor(predSVM1),factor(validation$Class))
+  acc1 <- mSVM1$overall["Accuracy"]
+  
+  predSVM2 = predict(svm, test, type = "C-classification")
+  mSVM2 = caret::confusionMatrix(factor(predSVM2),factor(test$Class))
+  acc2 <- mSVM2$overall["Accuracy"]
+  
+  Macc <- Macc %>% add_row(kernel=i, train=acc, validation = acc1)
+}
+```
+
+
+```{r}
+Macc <- Macc[-1,]
+Macc %>% 
+  gather("id", "value", 2:3) %>% 
+  ggplot(aes(kernel, value, col=id, size= 1))+
+  geom_point()+
+  labs(title = "Accuracy segun kernel")
+```
+
+
+El kernel = radial es el que da mejor
+```{r}
+set.seed(8);svm = svm(Class~.,train, kernel="radial", type = 'C-classification')
+
+predSVM = predict(svm, train, type = "C-classification")
+mSVM = caret::confusionMatrix(factor(predSVM),factor(train$Class))
+  
+predSVM1 = predict(svm, validation, type = "C-classification")
+mSVM1 = caret::confusionMatrix(factor(predSVM1),factor(validation$Class))
+
+predSVM2 = predict(svm, test, type = "C-classification")
+mSVM2 = caret::confusionMatrix(factor(predSVM2),factor(test$Class))
+
+print("TRAIN")
+mSVM
+print("VALIDATION")
+mSVM1
+print("TEST")
+mSVM2
+```
+```{r}
+MMacc <- MMacc %>% add_row(modelo=3, train=0.9341, validation =0.9179, test =0.9213)
+```
+
+
+#4.Arbol de Decision (AdD)
+
+```{r}
+cp  = c(0,0.001 ,0.01 ,0.1)
+Macc = data.frame(cbind(0,0,0))
+colnames(Macc) <- c("cp","train","validation")
+
+for(i in cp){
+  set.seed(8);arbol=rpart(Class~.,train,method="class", 
+            control = rpart.control(cp = i))
+  
+  predADD = predict(arbol, train, type = "class")
+  mADD = caret::confusionMatrix(factor(predADD),factor(train$Class))
+  
+  acc <- mADD$overall["Accuracy"]
+  
+  predADD1 = predict(arbol, validation, type = "class")
+  mADD1 = caret::confusionMatrix(factor(predADD1),factor(validation$Class))
+  acc1 <- mADD1$overall["Accuracy"]
+  
+  Macc <- Macc %>% add_row(cp=i, train=acc, validation = acc1)
+  Macc
+}
+```
+
+```{r}
+Macc <- Macc[-1,]
+Macc %>% 
+  gather("id", "value", 2:3) %>% 
+  ggplot(aes(cp, value, col=id, size= 1))+
+  geom_point()+
+  labs(title = "Accuracy segun cp")
+  
+```
+
+
+Elejimos cp igual a 0.1
+```{r}
+set.seed(8);arbol=rpart(Class~.,train,method="class", 
+            control = rpart.control(cp = 0.1))
+  
+  predADD = predict(arbol, train, type = "class")
+  mADD = caret::confusionMatrix(factor(predADD),factor(train$Class))
+  acc <- mADD$overall["Accuracy"]
+  
+  predADD1 = predict(arbol, validation, type = "class")
+  mADD1 = caret::confusionMatrix(factor(predADD1),factor(validation$Class))
+  acc1 <- mADD1$overall["Accuracy"]
+
+  predADD2 = predict(arbol, test, type = "class")
+  mADD2 = caret::confusionMatrix(factor(predADD2),factor(test$Class))
+  acc2 <- mADD2$overall["Accuracy"]
+```
+
+
+```{r}
+MMacc <- MMacc %>% add_row(modelo=4, train=acc, validation = acc1, test =acc2)
+```
+
+
+
+#5.K Nearest Neightbors (KNN)
+
+```{r}
+k  = c(1:35)
+Macc = data.frame(cbind(0,0,0))
+colnames(Macc) <- c("k","train","validation")
+
+for(i in k){
+  set.seed(8);predKNN = knn(train = train[,-16],
+             test = train[,-16],
+             cl = train[,16],
+             k = i)
+  mKNN = caret::confusionMatrix(factor(predKNN),factor(train$Class))
+  acc <- mKNN$overall["Accuracy"]
+  
+  set.seed(8);predKNN1 = knn(train = train[,-16],
+             test = validation[,-16],
+             cl = train[,16],
+             k = i)
+  mKNN1 = caret::confusionMatrix(factor(predKNN1),factor(validation$Class))
+  acc1 <- mKNN1$overall["Accuracy"]
+
+  
+  Macc <- Macc %>% add_row(k=i, train=acc, validation = acc1)
+}
+```
+
+```{r}
+Macc <- Macc[-1,]
+Macc %>% 
+  gather("id", "value", 2:3) %>% 
+  ggplot(aes(k, value, col=id, size= 0.1))+
+  geom_point()+
+  labs(title = "Accuracy segun k")
+```
+```{r}
+Macc$diferencia = Macc$train-Macc$validation
+plot(Macc$diferencia)
+```
+
+elejimos K = 29 ya que tiene los mejores valores
+```{r}
+set.seed(8);predKNN = knn(train = train[,-16],
+             test = train[,-16],
+             cl = train[,16],
+             k = 29)
+mKNN = caret::confusionMatrix(factor(predKNN),factor(train$Class))
+  
+set.seed(8);predKNN1 = knn(train = train[,-16],
+             test = validation[,-16],
+             cl = train[,16],
+             k = 29)
+mKNN1 = caret::confusionMatrix(factor(predKNN1),factor(validation$Class))
+
+set.seed(8);predKNN2 = knn(train = train[,-16],
+             test = test[,-16],
+             cl = train[,16],
+             k = 29)
+mKNN2 = caret::confusionMatrix(factor(predKNN2),factor(test$Class))
+  
+print("TRAIN")
+mKNN
+print("VALIDATION")
+mKNN1
+print("TEST")
+mKNN2
+```
+```{r}
+  acc <- mKNN$overall["Accuracy"]
+  
+  acc1 <- mKNN1$overall["Accuracy"]
+ 
+  acc2 <- mKNN2$overall["Accuracy"]
+ 
+  MMacc <- MMacc %>% add_row(modelo=5, train=acc, validation = acc1, test =acc2)
+```
+
+
+#6.Regresion Logistica (RL)
+Convertimos la variable a predecir en binaria para poder realizar la Regresion Logistica
+```{r}
+df_RL <- df
+df_RL <- df_RL%>%
+  dummy_cols(
+    remove_selected_columns = T,
+    select_columns = c('Class')
+  )
+df_RL$Class_SIRA <- NULL
+```
+
+
+```{r}
+set.seed(8);particion <- sample(seq(1, 3), size = nrow(df_RL), replace = TRUE, prob = c(.6, .2, .2))
+set.seed(8);trainRL <- df_RL[particion == 1,]
+set.seed(8);validationRL <- df_RL[particion == 2,]
+set.seed(8);testRL <- df_RL[particion == 3,]
+```
+
+
+```{r}
+set.seed(8);modeloRL = glm(formula = Class_DERMASON~ .,
+                            data = trainRL, 
+                             family = binomial)
+summary(modeloRL)
+```
+
+Prediccion
+```{r}
+predRL = predict(modeloRL, type = "response",
+                    newdata = trainRL[,-17])
+predRL = ifelse(predRL> 0.5, 1, 0)
+mRL = caret::confusionMatrix(factor(predRL), factor(trainRL[, 17]))
+mRL
+predRL1 = predict(modeloRL, type = "response",
+                    newdata = validationRL[,-17])
+predRL1 = ifelse(predRL1> 0.5, 1, 0)
+mRL1 = caret::confusionMatrix(factor(predRL1), factor(validationRL[, 17]))
+mRL1
+predRL2 = predict(modeloRL, type = "response",
+                    newdata = testRL[,-17])
+predRL2 = ifelse(predRL2> 0.5, 1, 0)
+mRL2 = caret::confusionMatrix(factor(predRL2), factor(testRL[, 17]))
+mRL2
+```
+
+```{r}
+  acc <- mRL$overall["Accuracy"]
+
+  acc1 <- mRL1$overall["Accuracy"]
+
+  acc2 <- mRL2$overall["Accuracy"]
+  
+  MMacc <- MMacc %>% add_row(modelo=6, train=acc, validation = acc1, test =acc2)
+
+```
+
+#7.Random Forest
+
+Analisis de modelo
+```{r}
+trees  = c(500, 1000, 3000)
+colnames(Macc) <- c("trees","train")
+for(i in trees){
+  print(paste("trees = ",i))
+  set.seed(8);rf = randomForest(factor(Class)~., df, ntree = i)
+
+  MRF = caret::confusionMatrix(rf$predicted,factor(df$Class))
+  acc <- MRF$overall["Accuracy"]
+  print(acc)
+}
+```
+
+
+#8.XGBoost
+
+Definimos una grilla o "grid" para buscar cuales son los mejores hiperparametros, con el methodod de cross validation usando 7 folds
+```{r}
+train_control = trainControl(method = "cv", number = 7, search = "grid")
+
+#Parametrizacion de la grilla
+gbmGrid <-  expand.grid(max_depth = c(2,4,6,8,10), 
+                        nrounds = (5:10)*50,
+                        eta =c(0.01, 0.001, 0.0001),
+                        gamma = 0,
+                        subsample = 1,
+                        min_child_weight = 1,
+                        colsample_bytree = 0.6)
+?xgboost
+#Entrenando el modelo XGBoost con los parametros definidos previamente
+set.seed(8);model = train(Class~., data = df, method = "xgbTree", trControl = train_control, tuneGrid = gbmGrid)
+model
+```
+ eta    max_depth  nrounds  Accuracy
+ 1e-03   6         250      0.9269
+
+Resultados nos quedamos con eta = 0.001 max depth = 6 y nrounds = 250, ya que tiene el accuracy mas alto, sea  0.9269
+
+
+
+
